@@ -8,7 +8,7 @@ export default function parse(tokens) {
     log.debug("parseIdentifier", tokens[0])
 
     if (tokens.length === 0) {
-      log.error("Parse error, unable to parse identifier, got EOF")
+      log.error(`Unable to parse identifier, got EOF`, token, token)
     }
 
     let identifier = tokens.shift()
@@ -20,7 +20,7 @@ export default function parse(tokens) {
     log.debug("parseExpression", token)
 
     if (tokens.length === 0) {
-      log.error("Parse error, unable to parse expression, got EOF")
+      log.error("unable to parse expression, got EOF")
     }
 
     let output = []
@@ -30,7 +30,7 @@ export default function parse(tokens) {
       let token = tokens.shift()
       let text = token.token
 
-      log.debug("Parsing expression, token is ", token, ", output is", output, ", operator_stack is", operator_stack)
+      log.debug("Parsing expression", token, { token, output, operator_stack })
 
       if (text[0] === '"') {
         // Literal string
@@ -115,7 +115,7 @@ export default function parse(tokens) {
         // https://en.wikipedia.org/wiki/Shunting-yard_algorithm
 
         let precedence = EVAL_OPERATORS[text].precedence
-        log.debug(`Working on operator ${text}, precedence is ${precedence}`)
+        log.debug(`Working on operator`, token, { text, precedence })
 
         while (operator_stack.length > 0) {
           let stack_operator = operator_stack[operator_stack.length - 1]
@@ -123,10 +123,10 @@ export default function parse(tokens) {
 
           let stack_precedence = EVAL_OPERATORS[stack_operator].precedence
 
-          log.debug(`Stack operator is ${stack_operator}, precedence is ${stack_precedence}`)
+          log.debug(`Continuing operator`, token, { stack_operator, stack_precedence })
 
           if (stack_precedence < precedence) {
-            log.debug(`Done popping, ${stack_precedence} < ${precedence}`)
+            log.debug(`Done popping`, token, { stack_precedence, precedence })
             break
           }
 
@@ -143,7 +143,7 @@ export default function parse(tokens) {
         break
       }
     }
-    log.debug("Done parsing expression, output is", output, ", operator_stack is", operator_stack)
+    log.debug(`Done parsing expression`, token, { output, operator_stack })
 
     while (operator_stack.length > 0) {
       output.push({ type: "operator", value: operator_stack.pop() })
@@ -193,7 +193,7 @@ export default function parse(tokens) {
   function parseDefine() {
     let token = tokens[0]
     tokens.shift()
-    log.debug("parseDefine", tokens[0])
+    log.debug("parseDefine", token)
 
     let identifier = parseIdentifier()
     let params = null,
@@ -217,19 +217,19 @@ export default function parse(tokens) {
       mode = "modifier"
 
       if (childParams.args.length != 1) {
-        log.error("Parse exception: when defining a modifier, child params must have exactly one argument")
+        log.error("when defining a modifier, child params must have exactly one argument", token)
       }
       if (childParams.args[0].asName === undefined) {
-        log.error("Parse exception: when defining a modifier, child param must be a single simple argument")
+        log.error("when defining a modifier, child param must be a single simple argument", token)
       }
       if (!(childParams === undefined || Object.keys(childParams).length != 0)) {
-        log.error("Parse exception: when defining a modifier, child param cannot have a default value")
+        log.error("when defining a modifier, child param cannot have a default value", token)
       }
     }
 
     if (tokens.length > 0 && tokens[0].token == "[") {
       if (mode === "modifier") {
-        log.error("Parse exception: when defining a modifier, cannot define a list param")
+        log.error("when defining a modifier, cannot define a list param", token)
       }
 
       list = parseList()
@@ -239,7 +239,7 @@ export default function parse(tokens) {
     if (tokens.length > 0 && tokens[0].token == "{") {
       body = parseGroup()
     } else {
-      log.error("Parse exception: during defines, the body must be a group with {}")
+      log.error("during defines, the body must be a group with {}", token)
     }
 
     let result = { type: "define", mode, identifier, token }
@@ -253,21 +253,20 @@ export default function parse(tokens) {
   }
 
   function parseParams() {
-    log.debug("parseParams", tokens[0])
-
     let token = tokens.shift()
+    log.debug("parseParams", token)
 
     let args = []
     let kwargs = {}
 
     if (tokens.length === 0) {
-      log.error("Parse error, unterminated params at", token, "")
+      log.error("unterminated params", token)
     }
 
     let parsingKwargs = false
     while (true) {
       if (tokens.length === 0) {
-        log.error("Parse error, unterminated params at", token, ", expected ) got EOF")
+        log.error("unterminated params", token, { expected: ")", got: "EOF" })
       } else if (tokens[0].token === ")") {
         tokens.shift()
         return { type: "params", args, kwargs, token }
@@ -276,9 +275,9 @@ export default function parse(tokens) {
       let identifier = parseExpression()
 
       if (tokens.length === 0) {
-        log.error("Parse error, unterminated params at", token, ", expected , or : got EOF")
+        log.error("unterminated params, expected , or : got EOF", token)
       } else if (parsingKwargs && tokens[0].token === ",") {
-        log.error("Parse error, invalid params at", token, ", args cannot come after kwargs, expected : got ,")
+        log.error("args cannot come after kwargs", token, { expected: ";", got: "," })
       }
 
       // Parsing a kwarg (key:value)
@@ -287,17 +286,17 @@ export default function parse(tokens) {
         parsingKwargs = true
 
         if (!identifier.asName) {
-          log.error("Parse error, kwargs key must be an identifier at", token, ", got", identifier, "")
+          log.error("kwargs key must be an identifier", token, { expected: "identifer", got: token })
         }
 
         if (tokens.length === 0) {
-          log.error("Parse error, unterminated params at", token, ", missing kwarg body at", key, "")
+          log.error("missing kwargs body", key)
         }
 
         let value = parseExpression()
 
         if (identifier.asName in kwargs) {
-          log.error("Parse error, duplicate kwarg at", token, "when parsing", identifier.asName, "")
+          log.error("duplicate kwarg", token, { name: identifier.asName })
         }
 
         args.push(identifier)
@@ -313,9 +312,9 @@ export default function parse(tokens) {
   }
 
   function parseList() {
-    log.debug("parseList", tokens[0])
-
     let token = tokens.shift()
+    log.debug("parseList", token)
+
     let nodes = []
 
     // Lists can be:
@@ -325,7 +324,7 @@ export default function parse(tokens) {
 
     while (true) {
       if (tokens.length === 0) {
-        log.error("Parse error, unterminated list", token, "")
+        log.error("unterminated list", token)
       }
 
       if (tokens[0].token === "]") {
@@ -335,25 +334,25 @@ export default function parse(tokens) {
 
       // Finish processing a for list
       if (tokens[0].token === "for") {
-        log.debug("parseList - found for")
+        log.debug("parseList - found for", token)
         tokens.shift() // for
         let variable = parseIdentifier()
-        log.debug("parseList - found for - variable is", variable)
+        log.debug("parseList - found for", token, { variable })
 
         if (tokens.length === 0) {
-          log.error("Parse error, unterminated for-list at", token, "")
+          log.error("unterminated for-list", token)
         } else if (tokens[0].token !== "in") {
-          log.error("Parse error, invalid for-list at", token, ', expected "in", got', tokens[0], "")
+          log.error("invalid for-list", token, { expected: "in", got: tokens[0] })
         }
         tokens.shift() // in
 
         let expression = parseExpression()
-        log.debug("parseList - found for - expression is", expression)
+        log.debug("parseList - found for", token, { expression })
 
         if (tokens.length === 0) {
-          log.error("Parse error, unterminated for-list at", token, "")
+          log.error("unterminated for-list", token)
         } else if (tokens[0].token != "]") {
-          log.error("Parse error, unterminated for-list at", token, ', expected "]", got', tokens[0], "")
+          log.error("unterminated for-list", token, { expected: "]", got: tokens[0] })
         }
 
         tokens.shift()
@@ -367,9 +366,9 @@ export default function parse(tokens) {
         let expression = parseExpression()
 
         if (tokens.length === 0) {
-          log.error("Parse error, unterminated times-list at", token, "")
+          log.error("unterminated times-list", token)
         } else if (tokens[0].token != "]") {
-          log.error("Parse error, unterminated times-list at", token, ', expected "]", got', tokens[0], "")
+          log.error("unterminated times-list", token, { expected: "]", got: tokens[0] })
         }
 
         tokens.shift()
@@ -392,14 +391,15 @@ export default function parse(tokens) {
   }
 
   function parseGroup(terminator = "}") {
-    log.debug("parseGroup", tokens[0])
-
     let token = tokens.shift()
+    log.debug("parseGroup", token)
+
     let nodes = []
 
     while (true) {
       if (tokens.length === 0) {
-        log.error("Parse error, unterminated group", token, "")
+        console.log(token)
+        log.error("unterminated group", token)
       }
 
       if (tokens[0].token === "}") {
@@ -420,8 +420,8 @@ export default function parse(tokens) {
   }
 
   // Implicitly add a group
-  tokens.unshift({ token: "{" })
-  tokens.push({ token: "}" })
+  tokens.unshift({ token: "{", row: 0, col: 0 })
+  tokens.push({ token: "}", row: 0, col: 0 })
 
   return parseGroup()
 }

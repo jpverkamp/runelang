@@ -58,7 +58,7 @@ export default function lex(text) {
     // Error case, no idea what's at the beginning
     let context = text.substring(0, 10).replace(/\n/g, "\\n")
     if (text.length > 10) context += "..."
-    log.error("Lex Error, unknown token at", row, ":", col, ":", context, "")
+    log.error(`Unknown token at ${context}`, { row, col })
   }
 
   return tokens

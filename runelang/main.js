@@ -10,12 +10,15 @@ import evaluate from "./evaluator.js"
 export function render(input, environment = null) {
   log.info("Lexer running")
   let lexed = lex(input)
-  log.info("Lexer finished", lexed)
+  log.info("Lexer finished", null, lexed)
 
   log.info("Parser running")
   let parsed = parse(lexed)
-  log.info("Parser finished")
-  log.info(JSON.stringify(parsed, (k, v) => (k === "next" || k === "token" ? "~" : v), 2))
+  log.info(
+    "Parser finished",
+    null,
+    JSON.stringify(parsed, (k, v) => (k === "next" || k === "token" ? "~" : v))
+  )
 
   log.info("Eval running")
   let result = evaluate(parsed, environment)

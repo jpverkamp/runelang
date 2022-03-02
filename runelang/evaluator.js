@@ -38,7 +38,7 @@ class Callable {
 
     let match = f.toString().match(/\((.*?)\)/)
     if (match === null) {
-      log.error("Runtime error: could not find params in", f.toString())
+      log.error(`could not find params in ${f.toString()}`, null, f)
     }
 
     for (let arg of match[1].split(",")) {
@@ -101,7 +101,7 @@ function evaluateGroup(node, environment) {
 function evaluateDefine(node, environment) {
   let name = node.identifier.text
   if (environment.get(name)) {
-    log.error(`Runtime error: unable to redefine ${name}`)
+    log.error(`unable to redefine ${name}`, node.location, node)
   }
 
   let defaults = []
@@ -109,7 +109,7 @@ function evaluateDefine(node, environment) {
     for (var i = 0; i < node.params.args.length; i++) {
       let name = node.params.args[i].asName
       if (!name) {
-        log.error(`Runtime error: unable to define ${name}, parameter`, node.params.args[i], "is missing a name")
+        log.error(`Unable to define ${name}, missing a name in args`, node.location, node)
       }
 
       // This will be undefined if no default is set, this is fine
@@ -157,10 +157,10 @@ function evaluateDefine(node, environment) {
   } else if (node.mode === "stacker") {
     throw "define stacker not implemented"
   } else {
-    log.error(`Runtime error: unknown define mode ${node.mode}`)
+    log.error(`unknown define mode ${node.mode}`, node.location, node)
   }
 
-  log.debug(`Created a new function ${name} of type ${node.mode} with defaults = ${defaults}`)
+  log.awesome(`Created a new function ${name} of type ${node.mode} with defaults = ${defaults}`, node)
 
   let callable = new Callable()
   callable.defaults = defaults
@@ -173,11 +173,11 @@ function evaluateDefine(node, environment) {
 
 function evaluateTerminalNode(object, node, environment) {
   if (node.body) {
-    log.error("Runtime exception: terminal", node, "should not have a body")
+    log.error("terminal should not have a body", node)
   }
 
   if (node.group) {
-    log.error("Runtime exception: terminal", node, "should not have a group")
+    log.error("terminal should not have a group", node)
   }
 
   return object.value.call(node.params, environment)
@@ -189,7 +189,7 @@ function evaluateModifierNode(object, node, environment) {
     asNext = false
   if (node.body) {
     if (node.body.type !== "group") {
-      log.error("Runtime exception: modifiers can only modify groups at", node, "")
+      log.error("modifiers can only modify groups", node)
     }
 
     child = node.body
@@ -198,7 +198,7 @@ function evaluateModifierNode(object, node, environment) {
     asNext = true
     node.next.evaluated = true
   } else {
-    log.error("Runtime exception: modifiers must have a following group or node at", node, "")
+    log.error("modifiers must have a following group or node", node)
   }
 
   child.eval = (env = null) => evaluate(child, env || environment, asNext)
@@ -209,7 +209,7 @@ function evaluateModifierNode(object, node, environment) {
 function evaluateStackerNode(object, node, environment) {
   // Stackers apply to the following list
   if (!node.list || node.body) {
-    log.error("Runtime exception: stackers can only modify lists at", node, "")
+    log.error("stackers can only modify lists", node)
   }
 
   let children = evaluate(node.list, environment)
@@ -226,7 +226,7 @@ function evaluateNode(node, environment) {
 
   let object = environment.get(node.identifier.text)
   if (!object) {
-    log.error(`Runtime exception: object ${node.identifier.text} is not defined`)
+    log.error(`object ${node.identifier.text} is not defined`, node)
   }
 
   if (object.type === "terminal") {
@@ -238,7 +238,7 @@ function evaluateNode(node, environment) {
   } else if (object.type == "group") {
     return evaluateGroup(object, environment)
   } else {
-    log.error("Runtime exception: unknown object type in", object, "")
+    log.error("unknown object type", node, object)
   }
 }
 
@@ -251,18 +251,18 @@ function evaluateList(node, environment) {
     return result
   } else if (node.mode === "for") {
     if (node.variable.type !== "identifier") {
-      log.error("Runtime exception: for-list variable must be an identifier, got", node.variable)
+      log.error(`for-list variable must be an identifier, got ${node.variable}`, node)
     }
 
     let variable = node.variable.text
     let iterable = evaluate(node.expression, environment)
     let forEnvironment = environment.extend()
 
-    log.debug("In for-loop, iterable is", iterable)
+    log.debug(`In for-loop, iterable is ${iterable}`, node)
 
     let result = []
     for (let eachValue of iterable) {
-      log.debug(`In for-loop, setting ${variable} to ${eachValue}`)
+      log.debug(`In for-loop, setting ${variable} to ${eachValue}`, node)
       forEnvironment.set(variable, eachValue)
       result.push(evaluate(node.body, forEnvironment))
     }
@@ -270,7 +270,7 @@ function evaluateList(node, environment) {
   } else if (node.mode === "times") {
     let times = evaluate(node.expression, environment)
     if (typeof times !== "number") {
-      log.error("Runtime exception: times-list must be a number, got", times)
+      log.error(`times-list must be a number, got ${times}`, node)
     }
 
     let result = []
@@ -279,7 +279,7 @@ function evaluateList(node, environment) {
     }
     return result
   } else {
-    log.error(`Runtime error: unknown list mode ${node.mode}`)
+    log.error(`unknown list mode ${node.mode}`, node)
   }
 }
 
@@ -305,17 +305,17 @@ function evaluateParams(node, environment) {
 }
 
 function evaluateExpression(node, environment) {
-  log.debug("Evaluating expression RPN:", node.rpn)
+  log.debug(`Evaluating RPN`, node, node.rpn)
 
   let stack = []
   for (let el of node.rpn) {
-    log.debug("Node is", el, "stack is", stack)
+    log.debug(`In RPN: Current stack`, node, { el, stack })
 
     if (el.type === "literal") {
       stack.push(el.value)
     } else if (el.type === "operator") {
       if (stack.length < 2) {
-        log.error("Runtime exception: tried to evaluate", el, "but needed two parameters")
+        log.error(`In RPN: tried to evaluate ${el} but needed two parameters`, node, { el, stack })
       }
 
       let right = stack.pop()
@@ -329,7 +329,7 @@ function evaluateExpression(node, environment) {
       if (value !== undefined && value !== null) {
         stack.push(value)
       } else {
-        log.error("Runtime exception: failed to evaluate variable", key, ", not defined")
+        log.error(`In RPN: failed to evaluate variable ${key} not defined`, node, { el, stack })
       }
     } else if (el.type === "function") {
       let args = []
@@ -339,12 +339,12 @@ function evaluateExpression(node, environment) {
       let result = el.value.apply(null, args)
       stack.push(result)
     } else {
-      log.error("Runtime exception: failed to evaluate RPN", el, ", unknown type")
+      log.error(`In RPN: unknown type ${el}`, node, { el, stack })
     }
   }
 
   if (stack.length !== 1) {
-    log.error("Runtime exception: expressions must result in exactly one value, got", stack, "")
+    log.error(`In RPN: expressions must result in exactly one value, got ${stack}`, node, { el, stack })
   }
 
   return stack[0]
@@ -380,7 +380,7 @@ export default function evaluate(node, environment = null, asNext = false) {
 
   // We've already evaluated this node (for example as a .next)
   if (node.evaluated && !asNext) {
-    log.debug("Skipping evaluation of", node, "already evaluated")
+    log.debug("Skipping evaluation, already evaluated", node)
     return null
   } else {
     let formatNode = (node) => {
@@ -395,7 +395,7 @@ export default function evaluate(node, environment = null, asNext = false) {
       }
     }
 
-    log.info(`[${id}] Evaluating ${formatNode(node)} in ${formatEnvironment(environment)}`)
+    log.info(`[${id}] Evaluating ${formatNode(node)} in ${formatEnvironment(environment)}`, node)
   }
 
   let result
@@ -432,9 +432,9 @@ export default function evaluate(node, environment = null, asNext = false) {
 
   // Get the value for a parameter list
   else {
-    log.error("Runtime error, unknown node type to evaluate in", node, "")
+    log.error("Runtime error, unknown node type to evaluate", node, node)
   }
 
-  log.info(`[${id}] Returning`, result)
+  log.info(`[${id}] Returning: ${result}`)
   return result
 }
